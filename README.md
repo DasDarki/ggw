@@ -285,7 +285,7 @@ let point = new Point(1, 2);
 ```
 
 If a classes has values in the constructor which are not assigned to properties, the compiler will automatically create
-constant properties with the same name.
+let properties with the same name.
 
 ```ggw
 class Point(x: int, y: int, z: int) {
