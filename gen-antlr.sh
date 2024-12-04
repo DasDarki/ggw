@@ -1,0 +1,1 @@
+antlr -Dlanguage=Go -o compiler/parser -package parser -visitor ggw.g4

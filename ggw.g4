@@ -35,6 +35,10 @@ statement
     | whenStatement
     | funcCallExpression
     | incrementalExpression
+    | grantStatement
+    | revokeStatement
+    | grantTree
+    | sessionDeclaration
     | 'return' expression? ';'?
     | 'break' INT? ';'?
     | 'continue' INT? ';'?
@@ -178,6 +182,20 @@ forInStatement : 'for' '('? variableName (',' variableName)* 'in' expression ')'
 
 whileStatement : 'while' '('? expression ')'? block;
 doWhileStatement : 'do' block 'while' '('? expression ')'?;
+
+grantStatement : 'grant' ('with' (STRING | '[' STRING (',' STRING)* ']'))?;
+revokeStatement : 'revoke' ('all' | arrayExpression);
+
+// Grant Tree
+grantTree : 'grant-tree' '{' grantTreeBody '}';
+grantTreeBody : grantTreeBranch*;
+grantTreeBranch : STRING grantTreeInheritance? 'has' arrayExpression;
+grantTreeInheritance : 'inherits' STRING (',' STRING)* ('expect' arrayExpression)?;
+
+// Session Declaration
+sessionDeclaration : 'session' IDENTIFIER? '{' sessionBody '}';
+sessionBody : sessionProperty*;
+sessionProperty : IDENTIFIER ':' expression;
 
 // Type System
 type : primitiveType | arrayType | mapType | tupleType | IDENTIFIER;

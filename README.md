@@ -686,7 +686,7 @@ a built-in way to do somethings I deem important in web development.
 Here is an overview:
 - `html`: A way to interact with the DOM.
 - `css`: A way to style the DOM.
-- `communication`: A way to communicate between frontend and backend. At best with multiple adapters (WebSockets, HTTP, etc.).
+- `communication`: A way to communicate between frontend and backend. At best with multiple adapters (WebSocket, HTTP, etc.).
 - `database`: A way to interact with databases.
 - `database/ORM`: A way to interact with databases in an object-oriented way.
 - `DI`: A way to handle dependency injection.
@@ -744,7 +744,7 @@ the compiler will use `HTTP` as default.
 ```ggw
 on backend;
 
-func add(a: int, b: int): int wire WebSockets {
+func add(a: int, b: int): int wire WebSocket {
     return a + b;
 }
 ```
@@ -764,7 +764,7 @@ With can be used with arrays of strings.
 ```ggw
 on backend
 
-func login(username: string, password: string): bool wire WebSockets {
+func login(username: string, password: string): bool wire WebSocket {
     if username == "admin" && password == "admin" {
         grant with ["admin"];
     } else if username == "user" && password == "user" {
@@ -781,7 +781,7 @@ func login(username: string, password: string): bool wire WebSockets {
 ```ggw
 on backend;
 
-func add(a: int, b: int): int wire WebSockets authenticated("admin") {
+func add(a: int, b: int): int wire WebSocket authenticated("admin") {
     return a + b;
 }
 ```
@@ -796,20 +796,104 @@ let success = wire.login("admin", "admin"); // this will authenticate the user a
 let result = wire.add(1, 2); // this will return 3
 ```
 
+Granting a user new roles while a session is enabled, will append the roles to the current session.
+
+The opposite of `grant`, used to destroy a session is `revoke`. `revoke all` will destroy the session and log out the user.
+
+If the `revoke` keyword is called with an array of strings, it wont destroy the session, just removes the roles from the current session.
+
+```ggw
+func logout(): none wire WebSocket {
+    revoke all // This will destroy the session
+}
+
+func removeAdmin(): none wire WebSocket {
+    revoke [ "admin" ] // This will just remove the admin role from current session
+}
+```
+
+To better define authorization there is cool construct called a `grant-tree`. A `grant-tree` is a tree of grants which
+can be used to define complex authorization rules.
+
+```ggw
+on backend;
+
+func add(a: int, b: int): int wire WebSocket authenticated("add") {
+    return a + b;
+}
+
+func subtract(a: int, b: int): int wire WebSocket authenticated("sub") {
+    return a - b;
+}
+
+func multiply(a: int, b: int): int wire WebSocket authenticated("mul") {
+    return a * b;
+}
+
+func divide(a: int, b: int): int wire WebSocket authenticated("div") {
+    return a / b;
+}
+
+grant-tree {
+    "user" has [ "add", "mul" ]
+    "admin" inherits user has [ "sub" ]
+}
+```
+
+Grant Trees can be used to define complex authorization rules. The `inherits` keyword is used to inherit grants from
+another role. Optionally `inherits` can be used with `except` to exclude grants from the inherited role.
+
+```ggw
+grant-tree {
+    "user" has [ "add" ]
+    "admin" inherits "user" except [ "mul" ] has [ "sub" ]
+}
+```
+
+Grant Tree Roles can inherit multiple roles.
+
+```ggw
+grant-tree {
+    "user" has [ "add" ]
+    "moderator" has [ "sub" ]
+    "admin" inherits "user", "moderator" has [ "div" ]
+}
+```
+This allows the developer to define complex authorization rules in a simple and expressive way. **Important**: Grant
+Trees are global. If they are defined in a file, they are accessible from all files in one project.
+
+One final thing to the subject of authentication and authorization is how to control the type of session. There are many
+ways to really work with sessions. The most popular thing and the optionated way to do in ggw is: JWT. Maybe we add
+more ways later but for now it should suffice. But to ensure a possiblity for backwards compatability we will need a
+way to specify the way of doing sessions - and a few paramters. Born is the `session` keyword. It defines the way
+sessions are handled. Currently, as said, there is only JWT so no other thing is needed. But if there are multiple ways
+later we allow to define the type of session right after the keyword like so:
+
+```ggw
+session JWT {
+    ttl: 15 * 60  // The time to live of the JWT in seconds
+    refresh: true // If there should be a refresh token?
+    refresh_ttl: 60 * 60 // The time to live of the refresh token in seconds
+    refresh_rotation: true // Whether or not there should be some kind of refresh token rotation. Used refresh tokens will be stored in the memory for now.
+    refresh_abs_ttl: 60 * 60 * 24 * 30 // The absolute time to live if refresh tokens are enabled. If this runs out, the complete session will be invalidated.
+}
+```
+**Important**: Same like Grant Trees, session definitions are global.
+
 Another cool thing: as said, the `wire` keyword can work with variables and values, too and even with classes. The
 de/serialization is done automatically. By default using JSON. But you can specify the format (maybe later).
 
 ```ggw
 on backend;
 
-let x = 42 wire WebSockets;
+let x = 42 wire WebSocket;
 
 class Point {
     x: int;
     y: int;
 }
 
-let point = new Point(1, 2) wire WebSockets;
+let point = new Point(1, 2) wire WebSocket;
 ```
 
 ```ggw
@@ -835,7 +919,7 @@ class Math {
 ```ggw
 on backend;
 
-let math = new Math() wire WebSockets;
+let math = new Math() wire WebSocket;
 ```
 
 ```ggw
