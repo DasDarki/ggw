@@ -673,8 +673,8 @@ class Point {
 }
 
 let point = new Point();
-let property = point.#reflect(PROPERTIES).find((property) => property.name == "x");
-let annotation = property.#reflect(ANNOTATIONS).find((annotation) => annotation.name == "deprecated");
+let property = point.#reflect(PROPERTIES).find((property) -> property.name == "x");
+let annotation = property.#reflect(ANNOTATIONS).find((annotation) -> annotation.name == "deprecated");
 print(annotation.message); // Use the Y instead.
 ```
 

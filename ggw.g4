@@ -2,7 +2,6 @@ grammar ggw;
 
 // Lexer rules
 WS : [ \t\r\n]+ -> skip;
-SEMICOLON : ';' -> skip;
 SINGLE_LINE_COMMENT : '//' ~[\r\n]* -> skip;
 MULTI_LINE_COMMENT : '/*' .*? '*/' -> skip;
 DOC_COMMENT : '///' ~[\r\n]*;
@@ -10,17 +9,41 @@ INT : [0-9]+;
 FLOAT : ([0-9]* '.') [0-9]+;
 BOOL : 'true' | 'false';
 STRING : '"' (~["\r\n])* '"' | '\'' (~['\r\n])* '\'' | '`' (~[`])* '`';
-IDENTIFIER : [a-zA-Z_] [a-zA-Z_0-9]*;
+IDENTIFIER : '#'? [a-zA-Z_] [a-zA-Z_0-9]*;
 
 // Parser rules
 file : statement* EOF;
 block : '{' statement* '}';
 
-statement : onStatement | moduleStatemnt | importStatement | variableDeclaration | variableMultiDeclaration | functionDeclaration | constructorFuncDeclaration | enumDeclaration | interfaceDeclaration | classDeclaration | ifStatement | forStatement | forInStatement | whileStatement | doWhileStatement | funcCallExpression;
+statement
+    : onStatement
+    | moduleStatemnt
+    | importStatement
+    | variableDeclaration
+    | variableMultiDeclaration
+    | functionDeclaration
+    | constructorFuncDeclaration
+    | annotationDeclaration
+    | enumDeclaration
+    | interfaceDeclaration
+    | classDeclaration
+    | ifStatement
+    | forStatement
+    | forInStatement
+    | whileStatement
+    | doWhileStatement
+    | whenStatement
+    | funcCallExpression
+    | incrementalExpression
+    | 'return' expression? ';'?
+    | 'break' INT? ';'?
+    | 'continue' INT? ';'?
+    | ';'
+    ;
 
-// Refactored expression rules
 expression
     : logicalExpression
+    | anonymousFunctionDeclaration
     ;
 
 logicalExpression
@@ -39,7 +62,6 @@ multiplicativeExpression
     : postfixExpression (('*' | '/' | '%') postfixExpression)*
     ;
 
-// Handling postfix expressions
 postfixExpression
     : primaryExpression postfixOperator*
     ;
@@ -47,9 +69,15 @@ postfixExpression
 postfixOperator
     : '[' expression ']'          // Field access
     | '?' expression ':' expression // Ternary (unary if)
+    | funcCallChaining
     ;
 
-// Base expressions
+incrementalExpression
+    : ('++' | '--') IDENTIFIER
+    | IDENTIFIER ('++' | '--')
+    | IDENTIFIER ('+=' | '-=' | '*=' | '/=' | '%=') expression
+    ;
+
 primaryExpression
     : INT
     | FLOAT
@@ -58,6 +86,11 @@ primaryExpression
     | IDENTIFIER
     | groupedExpression
     | funcCallExpression
+    | whenStatement
+    | arrayExpression
+    | mapExpression
+    | identifierUsage
+    | incrementalExpression
     ;
 
 // Grouping expressions
@@ -67,7 +100,13 @@ groupedExpression
 
 // Function calls
 funcCallExpression
-    : identifierUsage '(' argumentPassList ')'
+    : identifierUsage '(' argumentPassList? ')'
+    | 'new' identifierUsage '(' argumentPassList? ')'
+    ;
+
+funcCallChaining
+    : '.' identifierUsage '(' argumentPassList? ')'
+    | '.' identifierUsage
     ;
 
 // Arrays and maps
@@ -80,8 +119,8 @@ moduleStatemnt : 'module' IDENTIFIER onStatement?;
 importStatement : 'import' IDENTIFIER ('as' IDENTIFIER)? ('from' STRING)?;
 
 // Arguments
-argument : IDENTIFIER typeDeclaration ('=' expression)?;
-argumentList : argument (',' argument)* ('...' argument)?;
+argument : IDENTIFIER typeDeclaration? ('=' expression)?;
+argumentList : argument (',' argument)* (',' '...' argument)? | '...' argument;
 argumentPassList : expression (',' expression)*;
 
 // Annotations
@@ -99,28 +138,31 @@ deconstruct : '(' IDENTIFIER (',' IDENTIFIER)* ')';
 
 variableName : IDENTIFIER | deconstruct ;
 variableKind : accessModifier? 'let' | 'const';
-variableDeclaration : variableKind? variableName typeDeclaration? ('=' expression)?;
-variableMultiDeclaration : variableKind? variableName (',' variableName)* typeDeclaration? ('=' expression (',' expression)*)?;
+variableDeclaration : variableKind? variableName typeDeclaration? ('=' expression)? wireDeclaration? ';'?;
+variableMultiDeclaration : variableKind? variableName (',' variableName)* typeDeclaration? ('=' expression (',' expression)*)? wireDeclaration? ';'?;
+variableClassDeclaration : annotationList? accessModifier? 'static'? (variableDeclaration | variableMultiDeclaration);
 
 wireKind : 'WebSockets' | 'HTTP';
-wireDeclaration : 'wire' wireKind? onStatement? ;
+wireDeclaration : 'wire' wireKind? wireAuth? onStatement? ;
+wireAuth : 'authenticated' '('? (STRING | '[' STRING (',' STRING)* ']') ')'?;
 
-functionDeclaration : annotationList? 'func' IDENTIFIER genericDeclaration? '(' argumentList ')' typeDeclaration? wireDeclaration? block;
-functionClassDeclaration : annotationList? accessModifier? 'static'? 'func' IDENTIFIER genericDeclaration? '(' argumentList ')' typeDeclaration? block;
+functionDeclaration : annotationList? 'func' IDENTIFIER genericDeclaration? '(' argumentList? ')' typeDeclaration? wireDeclaration? block;
+functionClassDeclaration : annotationList? accessModifier? 'static'? 'func' IDENTIFIER genericDeclaration? '(' argumentList? ')' typeDeclaration? block;
+anonymousFunctionDeclaration : '(' argumentList? ')' typeDeclaration? '->' (block | expression);
 
-constructorHeadDeclaration : '(' argumentList ')' ;
+constructorHeadDeclaration : '(' argumentList?')' ;
 constructorFuncDeclaration : annotationList? accessModifier? 'constructor' constructorHeadDeclaration block;
 
 enumDeclaration : annotationList accessModifier? 'enum' IDENTIFIER constructorHeadDeclaration '{' enumProperty (',' enumProperty)* functionClassDeclaration* '}';
-enumProperty : annotationList IDENTIFIER ('(' argumentPassList ')')?;
+enumProperty : annotationList IDENTIFIER ('(' argumentPassList? ')')?;
 
 interfaceDeclaration : accessModifier? 'interface' IDENTIFIER genericDeclaration? interfaceExtends? '{' interfaceBodyDeclaration* '}';
 interfaceBodyDeclaration : interfaceProperty | interfaceFunction;
 interfaceProperty : variableKind? IDENTIFIER typeDeclaration;
-interfaceFunction : IDENTIFIER genericDeclaration? '(' argumentList ')' typeDeclaration;
+interfaceFunction : IDENTIFIER genericDeclaration? '(' argumentList? ')' typeDeclaration;
 
 classDeclaration : annotationList accessModifier? 'class' IDENTIFIER genericDeclaration? constructorHeadDeclaration? extends? implements? onStatement? '{' classBodyDeclaration* '}';
-classBodyDeclaration : variableDeclaration | functionClassDeclaration | constructorFuncDeclaration | classDeclaration | interfaceDeclaration | enumDeclaration;
+classBodyDeclaration : variableClassDeclaration | functionClassDeclaration | constructorFuncDeclaration | classDeclaration | interfaceDeclaration | enumDeclaration;
 
 // Control flow
 ifStatement : 'if' '('? expression ')'? block ('else if' '('? expression ')'? block)* ('else' block)?;
@@ -148,7 +190,7 @@ genericTypeDeclaration : IDENTIFIER extends? implements? ;
 genericDeclaration : '<' genericTypeDeclaration (',' genericTypeDeclaration)* '>';
 genericUsage : '<' type '>' ;
 
-identifierUsage : IDENTIFIER genericUsage? ('.' identifierUsage)*;
+identifierUsage : 'wire.'? IDENTIFIER genericUsage? ('.' identifierUsage)*;
 extends : 'extends' identifierUsage;
 interfaceExtends : 'extends' identifierUsage (',' identifierUsage)*;
 implements : 'implements' identifierUsage (',' identifierUsage)*;
